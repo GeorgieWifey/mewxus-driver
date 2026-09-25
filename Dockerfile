@@ -44,16 +44,19 @@ RUN composer install \
 # ---------------------------------------------------------------- runtime
 FROM php:8.4-cli-alpine AS runtime
 
-# sqlite3/pdo_sqlite: the preset store. intl/mbstring: Laravel and the protocol's
-# byte maths. opcache: this app ships no hot-reload path.
+# sqlite3/pdo_sqlite: the preset store. mbstring needs oniguruma, intl needs icu
+# — both are separate apk packages on Alpine, unlike the Debian image where the
+# -dev packages pull their runtimes in. opcache: this app ships no hot-reload path.
 RUN apk add --no-cache \
         libintl \
         icu-libs \
+        oniguruma \
         libpng \
         libzip \
         sqlite-libs \
     && apk add --no-cache --virtual .build-deps \
         icu-dev \
+        oniguruma-dev \
         libzip-dev \
         libpng-dev \
         sqlite-dev \
