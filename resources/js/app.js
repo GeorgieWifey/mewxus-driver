@@ -276,19 +276,24 @@ Alpine.data('mewxus', () => ({
   },
 
   async disconnect() {
+    // The demo device drives its own timer; without stopping it the feed keeps
+    // firing into a torn-down component and keys stay lit after disconnecting.
+    this._device?.stopTravelFeed?.()
     this._transport?.close()
     this._device = null
     this._transport = null
     this.status = 'idle'
     this.firmware = null
+    this.pressedSlots = new Set()
+    this.liveSlot = null
   },
 
   startDemo() {
-    const mock = new MockDevice()
-    this._device = mock
     this._transport = null
-    this.productName = mock.info.productName
-    this.loadFrom(new MockDevice()) // fresh image so demo always starts clean
+    this.productName = new MockDevice().info.productName
+    // loadFrom installs a fresh device image, so demo always starts from a
+    // known state rather than whatever the last session edited.
+    this.loadFrom(new MockDevice())
     this.status = 'demo'
     this.toast('Demo mode', 'No hardware needed. Everything is editable.', 'peach')
   },
@@ -317,6 +322,10 @@ Alpine.data('mewxus', () => ({
   loadFrom(mock) {
     this._device = mock
     this.profile = 0
+    // The real path subscribes to the live feed on the transport; demo mode
+    // bypasses the transport entirely, so without this the mock emits keypress
+    // events into nothing and the board never animates.
+    mock.on('travel', (frame) => this.onTravelFrame(frame))
     this.config = {
       ...this.config,
       lightEffect: mock.config[0][8],
