@@ -1,9 +1,3 @@
-# Mewxus deployment config.
-#
-# Explicit build context and Dockerfile so Railway does not have to guess, and
-# one replica: the preset store is a SQLite file on a single volume, so two
-# containers would each hold a different database.
-
 {
   "$schema": "https://railway.com/railway.schema.json",
   "build": {
