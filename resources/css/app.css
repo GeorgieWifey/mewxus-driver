@@ -1,0 +1,569 @@
+/* Mewxus — visual world.
+ *
+ * UnoCSS carries the utility layer and the component shortcuts. This file holds
+ * only what utilities cannot express well: font loading, the dial's geometry,
+ * the keycap grid, and the pixel-art motion vocabulary. */
+
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Silkscreen:wght@400;700&family=Nunito:wght@400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap');
+@import '@unocss/reset/tailwind.css';
+/* UnoCSS's utilities are imported from resources/js/app.js, not here: the
+ * plugin resolves `uno.css` through the JS module graph, and a CSS @import would
+ * be handed to postcss first and fail to resolve. Without that import the plugin
+ * still runs and the reset still loads, so every `mx-*` shortcut silently
+ * resolves to nothing and the failure looks like a broken design. */
+
+:root {
+  /* Catppuccin Latte, declared here as well as in uno.config.js so raw CSS and
+   * engine-drawn surfaces (sliders, scrollbars) share one source of truth. */
+  --ct-rosewater: #dc8a78;
+  --ct-flamingo: #dd7878;
+  --ct-pink: #ea76cb;
+  --ct-mauve: #8839ef;
+  --ct-red: #d20f39;
+  --ct-maroon: #e64553;
+  --ct-peach: #fe640b;
+  --ct-yellow: #df8e1d;
+  --ct-green: #40a02b;
+  --ct-teal: #179299;
+  --ct-sky: #04a5e5;
+  --ct-sapphire: #209fb5;
+  --ct-blue: #1e66f5;
+  --ct-lavender: #7287fd;
+  --ct-text: #4c4f69;
+  --ct-subtext1: #5c5f77;
+  --ct-subtext0: #6c6f85;
+  --ct-overlay2: #7c7f93;
+  --ct-overlay1: #8c8fa1;
+  --ct-overlay0: #9ca0b0;
+  --ct-surface2: #acb0be;
+  --ct-surface1: #bcc0cc;
+  --ct-surface0: #ccd0da;
+  --ct-base: #eff1f5;
+  --ct-mantle: #e6e9ef;
+  --ct-crust: #dce0e8;
+
+  /* The 4px sprite grid. Everything snaps to it. */
+  --u: 4px;
+}
+
+html {
+  background: var(--ct-crust);
+  color: var(--ct-text);
+  font-family: Nunito, ui-rounded, system-ui, sans-serif;
+  /* Pixel art must never be smoothed. */
+  image-rendering: pixelated;
+}
+
+body {
+  min-height: 100dvh;
+  /* Dither ground: the desk the board sits on. */
+  background-color: var(--ct-mantle);
+  background-image: radial-gradient(var(--ct-surface1) 1px, transparent 1px);
+  background-size: 4px 4px;
+}
+
+/* Pixel art is anti-aliasing-hostile: keep glyph edges hard. */
+.font-pixel,
+[class*='font-pixel'] {
+  -webkit-font-smoothing: none;
+  font-smooth: never;
+  font-variant-ligatures: none;
+}
+
+*:focus-visible {
+  outline: 3px solid var(--ct-mauve);
+  outline-offset: 0;
+}
+
+/* ---------------------------------------------------------------- the dial */
+
+/* The composition: the board is the hub, and the six concerns ride a ring
+ * around it. The ring turns to bring a concern to the twelve-o'clock seat.
+ *
+ * Geometry notes, because two mistakes here cost a debugging round:
+ *   - A seat is a fixed-size box centred on the hub with negative margins, not a
+ *     zero-size point with `translate(-50%,-50%)`. With zero size that translate
+ *     is a no-op, so every 76px button hangs off its own anchor and the ring
+ *     reads as scattered squares.
+ *   - Radius must fit inside the dial: with r=132px and 76px seats the ring
+ *     spans 340px, so a 380px box contains it. A radius larger than
+ *     (box - seat) / 2 overflows the column and covers the header.
+ *   - Only one rotation is applied: each seat rotates by its own angle plus the
+ *     ring's, and its button counter-rotates by exactly the negation. Rotating
+ *     the ring container *and* counter-rotating on the button would double it.
+ */
+.dial {
+  position: relative;
+  width: 100%;
+  height: 380px;
+  --dial-radius: 132px;
+  --ring-angle: 0deg;
+}
+
+.dial-seat {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 76px;
+  height: 76px;
+  margin: -38px 0 0 -38px;
+  transform: rotate(calc(var(--seat-base) + var(--ring-angle)))
+    translateY(calc(var(--dial-radius) * -1));
+  transition: transform 420ms cubic-bezier(0.34, 1.4, 0.4, 1);
+}
+
+.dial-seat > button {
+  width: 100%;
+  height: 100%;
+  transform: rotate(calc(-1 * (var(--seat-base) + var(--ring-angle))));
+  transition: transform 420ms cubic-bezier(0.34, 1.4, 0.4, 1);
+}
+
+/* The spoke from the hub to the active seat: a dotted line, drawn as a repeating
+ * gradient so it inherits the pixel language instead of being a hairline SVG. */
+.dial-spoke {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 3px;
+  height: var(--dial-radius);
+  transform-origin: top center;
+  transform: rotate(var(--ring-angle));
+  background-image: linear-gradient(
+    to bottom,
+    var(--ct-surface2) 0 4px,
+    transparent 4px 8px
+  );
+  background-size: 3px 8px;
+  transition: transform 420ms cubic-bezier(0.34, 1.4, 0.4, 1);
+  pointer-events: none;
+  margin-left: -1.5px;
+}
+
+@media (max-width: 1023px) {
+  .dial {
+    height: 320px;
+    --dial-radius: 108px;
+  }
+  .dial-seat {
+    width: 68px;
+    height: 68px;
+    margin: -34px 0 0 -34px;
+  }
+}
+
+/* ------------------------------------------------------------------ tones */
+
+/* A coloured accent on one side of a card is the most recognisable tell of a
+ * generated interface, so emphasis is carried a different way: the whole border
+ * changes colour and the ground gets a dither. That is what a 16-colour sprite
+ * does with the pixels it has — it does not own a soft glow.
+ */
+/* Compound selectors, because `mx-panel` also sets a border colour through a
+ * utility of equal weight; a bare `.mx-tone-*` rule loses to it and the accent
+ * silently stays ink. These add one class of specificity to win. */
+.mx-panel.mx-warn, .mx-panel.mx-danger, .mx-panel.mx-pink,
+.mx-panel.mx-tone-live, .mx-panel.mx-tone-danger, .mx-panel.mx-tone-warn,
+.mx-panel.mx-tone-peach, .mx-panel.mx-tone-pink,
+.mx-inset.mx-warn, .mx-inset.mx-danger, .mx-inset.mx-pink,
+.mx-inset.mx-tone-live, .mx-inset.mx-tone-danger, .mx-inset.mx-tone-warn,
+.mx-inset.mx-tone-peach, .mx-inset.mx-tone-pink {
+  border-color: currentColor;
+  background-image: radial-gradient(currentColor 1px, transparent 1px);
+  background-size: 4px 4px;
+  background-position: 0 0;
+}
+
+.mx-warn, .mx-tone-warn { color: var(--ct-peach); }
+.mx-danger, .mx-tone-danger { color: var(--ct-red); }
+.mx-pink, .mx-tone-pink { color: var(--ct-pink); }
+.mx-tone-live { color: var(--ct-green); }
+.mx-tone-peach { color: var(--ct-peach); }
+
+/* The dither sits under the text, so the text keeps full contrast. */
+.mx-warn > *, .mx-danger > *,
+.mx-tone-live > *, .mx-tone-danger > *, .mx-tone-warn > *,
+.mx-tone-peach > *, .mx-tone-pink > * {
+  position: relative;
+}
+
+/* --------------------------------------------------------------- keycaps */
+
+/* The keyboard render. Keys are absolutely placed from the layout data's own
+ * x/y/w/h units, so the on-screen board matches the physical one rather than
+ * being a re-drawn approximation.
+ *
+ * Below ~700px the board cannot shrink further without the labels colliding, so
+ * it stops shrinking and the wrapper scrolls instead. A 61-key board squeezed
+ * into 390px gives 25px caps whose legends overlap; a horizontally scrollable
+ * legible board is strictly better than a legible-looking broken one.
+ */
+.keyboard-scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 4px;
+}
+
+.keyboard {
+  position: relative;
+  width: 100%;
+  min-width: 660px;
+  aspect-ratio: 800 / 280;
+  /* Cap the scale so a wide monitor does not produce absurd keys. */
+  max-width: 880px;
+  /* Container query units let the legends scale with the board's own width, at
+   * any viewport, with no JS and no font-size breakpoints. */
+  container-type: inline-size;
+}
+
+.keycap {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border: 3px solid var(--ct-text);
+  background: var(--ct-surface0);
+  color: var(--ct-text);
+  cursor: pointer;
+  overflow: hidden;
+  /* Sprite elevation: a hard offset, never a blur. */
+  box-shadow: 2px 2px 0 0 var(--ct-overlay0);
+  transition:
+    transform 60ms steps(2),
+    box-shadow 60ms steps(2),
+    background-color 90ms steps(2);
+  padding: 2px;
+  line-height: 1;
+}
+
+.keycap:hover {
+  background: var(--ct-surface1);
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0 0 var(--ct-overlay0);
+}
+
+.keycap:active,
+.keycap[data-pressed='true'] {
+  transform: translate(2px, 2px);
+  box-shadow: none;
+}
+
+.keycap[data-selected='true'] {
+  border-color: var(--ct-mauve);
+  background: color-mix(in srgb, var(--ct-mauve) 18%, var(--ct-surface0));
+  box-shadow: 2px 2px 0 0 var(--ct-mauve);
+}
+
+.keycap[data-remapped='true']::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 6px;
+  height: 6px;
+  background: var(--ct-peach);
+  border: 2px solid var(--ct-text);
+}
+
+/* A physical keypress arriving over the 0xA0 feed. Two frames of flash, which
+ * is what the real LED does. */
+@keyframes key-flash {
+  0% {
+    background: var(--ct-mauve);
+    color: var(--ct-base);
+    border-color: var(--ct-mauve);
+  }
+  45% {
+    background: color-mix(in srgb, var(--ct-mauve) 55%, var(--ct-base));
+    color: var(--ct-base);
+  }
+  100% {
+    background: var(--ct-surface0);
+    color: var(--ct-text);
+  }
+}
+
+.keycap[data-live='true'] {
+  animation: key-flash 420ms steps(3) 1;
+}
+
+.keycap-label {
+  font-family: Nunito, sans-serif;
+  font-weight: 800;
+  /* 1.25% of the board's inline size: 11px at the 880px cap, scaling down with
+   * the board rather than wrapping or overflowing. */
+  font-size: clamp(7px, 1.25cqw, 11px);
+  line-height: 1.1;
+  text-align: center;
+  white-space: pre-line;
+  word-break: break-word;
+  max-width: 100%;
+}
+
+.keycap-sub {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: clamp(5px, 0.9cqw, 8px);
+  color: var(--ct-subtext0);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+@container (max-width: 700px) {
+  /* Too little room for two stacked legends; keep the keycode, drop the sub. */
+  .keycap-sub {
+    display: none;
+  }
+  .keycap {
+    border-width: 2px;
+  }
+}
+
+/* --------------------------------------------------------------- controls */
+
+/* Range inputs are the one control the browser draws itself, so they are
+ * rebuilt here to keep the pixel language. */
+input[type='range'].mx-range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 20px;
+  background: transparent;
+  cursor: pointer;
+}
+
+input[type='range'].mx-range::-webkit-slider-runnable-track {
+  height: 12px;
+  background: var(--ct-crust);
+  border: 2px solid var(--ct-text);
+}
+
+input[type='range'].mx-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-top: -4px;
+  background: var(--ct-mauve);
+  border: 2px solid var(--ct-text);
+  border-radius: 0;
+  box-shadow: 2px 2px 0 0 var(--ct-overlay0);
+}
+
+input[type='range'].mx-range::-moz-range-track {
+  height: 12px;
+  background: var(--ct-crust);
+  border: 2px solid var(--ct-text);
+}
+
+input[type='range'].mx-range::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  background: var(--ct-mauve);
+  border: 2px solid var(--ct-text);
+  border-radius: 0;
+}
+
+input[type='checkbox'].mx-check {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  background: var(--ct-base);
+  border: 3px solid var(--ct-text);
+  cursor: pointer;
+  position: relative;
+  flex: none;
+}
+
+input[type='checkbox'].mx-check:checked {
+  background: var(--ct-green);
+}
+
+input[type='checkbox'].mx-check:checked::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 6px;
+  width: 5px;
+  height: 9px;
+  border-right: 3px solid var(--ct-base);
+  border-bottom: 3px solid var(--ct-base);
+}
+
+input[type='color'].mx-color {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 40px;
+  height: 28px;
+  padding: 0;
+  border: 3px solid var(--ct-text);
+  background: none;
+  cursor: pointer;
+}
+
+input[type='color'].mx-color::-webkit-color-swatch-wrapper {
+  padding: 2px;
+}
+
+input[type='color'].mx-color::-webkit-color-swatch {
+  border: none;
+  border-radius: 0;
+}
+
+/* ---------------------------------------------------------------- mascot */
+
+/* The cat breathes while idle and blinks on state change. Both are two-frame
+ * animations, which is how a sprite actually moves; an eased tween would read
+ * as a different medium. */
+@keyframes mascot-idle {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes mascot-blip {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.08);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.mascot {
+  animation: mascot-idle 2.4s steps(2, jump-none) infinite;
+}
+
+.mascot[data-state='working'] {
+  animation: mascot-blip 700ms steps(2, jump-none) infinite;
+}
+
+/* ----------------------------------------------------------------- panel */
+
+/* The open panel slides over the board's edge. The board stays visible behind
+ * it, which is the whole point of the composition: you never lose sight of what
+ * you are configuring. */
+.panel-sheet {
+  transition: transform 320ms cubic-bezier(0.34, 1.3, 0.5, 1);
+}
+
+.panel-enter {
+  transform: translateX(calc(100% + 8px));
+}
+
+@keyframes panel-swap {
+  0% {
+    opacity: 0;
+    transform: translateX(14px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.panel-swap {
+  animation: panel-swap 260ms steps(4) 1;
+}
+
+/* ------------------------------------------------------------------ misc */
+
+@keyframes dot-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+
+.status-dot {
+  animation: dot-pulse 1.6s steps(2, jump-none) infinite;
+}
+
+/* Table-ish readouts: the byte inspector and the advanced-mode lists. */
+.mx-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+}
+
+.mx-table th {
+  text-align: left;
+  font-family: Nunito, sans-serif;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ct-subtext0);
+  border-bottom: 2px solid var(--ct-surface2);
+  padding: 4px 6px;
+}
+
+.mx-table td {
+  border-bottom: 1px solid var(--ct-surface1);
+  padding: 3px 6px;
+}
+
+.mx-table tr:hover td {
+  background: var(--ct-surface0);
+}
+
+/* Scrollbars, because a pixel world should not have a smooth scrollbar. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--ct-surface2) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--ct-crust);
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--ct-surface2);
+  border: 2px solid var(--ct-crust);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--ct-overlay0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* htmx request feedback: the pixel equivalent of a spinner. */
+.htmx-request .htmx-indicator {
+  display: inline-block;
+}
+
+.htmx-indicator {
+  display: none;
+}
+
+.htmx-request.htmx-indicator {
+  display: inline-block;
+}

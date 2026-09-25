@@ -1,0 +1,29 @@
+# --- Laravel -----------------------------------------------------------------
+/vendor
+/node_modules
+/public/build
+/public/hot
+/public/storage
+/storage/*.key
+/storage/pail
+/bootstrap/ssr
+/.env
+/.env.backup
+/.env.production
+/.phpunit.result.cache
+Homestead.json
+Homestead.yaml
+auth.json
+npm-debug.log
+yarn-error.log
+/.fleet
+/.idea
+/.nova
+/.vscode
+/.zed
+/.impeccable
+
+# --- Mewxus ------------------------------------------------------------------
+# Extracted vendor sources and scratch artefacts kept during protocol work.
+/vendor-src
+/docs/scratch
