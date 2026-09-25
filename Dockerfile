@@ -70,10 +70,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 ENV APACHE_DOCUMENT_ROOT=/var/www/html/public
 RUN set -eux; \
     rm -f /etc/apache2/mods-enabled/mpm_*.load /etc/apache2/mods-enabled/mpm_*.conf; \
+    mv /etc/apache2/mods-available/mpm_event.* /tmp/ 2>/dev/null || true; \
+    mv /etc/apache2/mods-available/mpm_worker.* /tmp/ 2>/dev/null || true; \
     a2enmod mpm_prefork rewrite headers; \
-    echo "--- mpm .load modules enabled ---"; \
-    ls -1 /etc/apache2/mods-enabled/ | grep -i '^mpm_.*\.load$' || true; \
-    test "$(ls -1 /etc/apache2/mods-enabled/ | grep -ci '^mpm_.*\.load$')" = "1"; \
     sed -ri 's!/var/www/html!/var/www/html/public!g' \
         /etc/apache2/sites-available/*.conf \
         /etc/apache2/apache2.conf \
@@ -83,7 +82,10 @@ RUN set -eux; \
     Require all granted\n\
 </Directory>\n' > /etc/apache2/conf-available/laravel.conf; \
     a2enconf laravel; \
-    echo "--- apache config test ---"; \
+    echo "--- every LoadModule mpm line in /etc/apache2 ---"; \
+    grep -rn "LoadModule mpm" /etc/apache2 || true; \
+    test "$(grep -rc "LoadModule mpm" /etc/apache2 | awk -F: '{s+=\$2} END {print s}')" = "1"; \
+    echo "--- apache2ctl configtest ---"; \
     apache2ctl configtest
 
 # Opcache for a PHP app with no hot reload path.
