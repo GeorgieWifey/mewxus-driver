@@ -828,10 +828,27 @@ Alpine.data('mewxus', () => ({
       this.presetName = ''
       this.presetDescription = ''
       this.toast('Saved', `“${data.preset.name}” is in the library.`, 'live')
-      // Refresh the library partial without a reload.
-      window.htmx?.trigger('#preset-library', 'refresh')
+      this.refreshLibrary()
     } catch (err) {
       this.toast('Save failed', err.message, 'danger')
+    }
+  },
+
+  /**
+   * Ask the library partial to reload.
+   *
+   * Fires on `body`, which always exists, rather than on `#preset-library`: that
+   * element only exists while the settings panel is mounted, so targeting it
+   * threw on every save made from anywhere else and the user saw a success and a
+   * failure toast for the same action. Reaching for body matches the partial's
+   * own `hx-trigger="refresh from:body"`.
+   */
+  refreshLibrary() {
+    if (!window.htmx?.trigger) return
+    try {
+      window.htmx.trigger(document.body, 'refresh')
+    } catch {
+      // A refresh failure must never be reported as a failed save.
     }
   },
 
