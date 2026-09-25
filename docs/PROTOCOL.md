@@ -15,8 +15,10 @@ The bundle contains **two** keymap formats, and only one of them is live:
   the bundle but **never invoked**: `getCurKeyInfosData` and `setKeyInfos` have
   zero call sites in the page chunk. Treat as an abandoned newer format.
 
-`plan.md`'s claim of 3 bytes per slot is correct for the live path; its claim that
-this is the only encoding is not, which is why both are documented.
+`plan.md` in this repo documents the stride-3 path and its sub-command numbers
+correctly. The stride-4 variant is recorded here only so a future reader who
+finds sub-commands 58/59 in the vendor bundle does not mistake them for the
+supported path.
 
 ## Device filters
 
