@@ -62,17 +62,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Serve out of public/. The default document root would expose .env and the
 # whole application tree.
+#
+# MPM note: the base image ships prefork, and `a2enmod` can leave a second MPM
+# enabled alongside it, which makes Apache refuse to start with "More than one
+# MPM loaded". Both alternatives are disabled first so exactly one is loaded
+# regardless of what the base image or a rebuild left behind.
 ENV APACHE_DOCUMENT_ROOT=/var/www/html/public
-RUN sed -ri 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' \
+RUN set -eux; \
+    a2dismod mpm_event mpm_worker 2>/dev/null || true; \
+    a2enmod mpm_prefork rewrite headers; \
+    sed -ri 's!/var/www/html!/var/www/html/public!g' \
         /etc/apache2/sites-available/*.conf \
         /etc/apache2/apache2.conf \
-        /etc/apache2/conf-available/*.conf \
-    && a2enmod rewrite headers \
-    && printf '<Directory ${APACHE_DOCUMENT_ROOT}>\n\
+        /etc/apache2/conf-available/*.conf; \
+    printf '<Directory /var/www/html/public>\n\
     AllowOverride All\n\
     Require all granted\n\
-</Directory>\n' > /etc/apache2/conf-available/laravel.conf \
-    && a2enconf laravel
+</Directory>\n' > /etc/apache2/conf-available/laravel.conf; \
+    a2enconf laravel
 
 # Opcache for a PHP app with no hot reload path.
 RUN printf 'opcache.enable=1\n\
