@@ -35,10 +35,14 @@ RUN composer install \
 # ---------------------------------------------------------------- runtime
 FROM php:8.3-apache AS runtime
 
-# sqlite3/pdo_sqlite: the preset store. mbstring/bcmath/intl: Laravel and the
-# byte maths in the protocol layer. zip/gd: asset handling. libicu for intl.
+# sqlite3/pdo_sqlite: the preset store. libsqlite3-dev is required — the base
+# image ships the sqlite runtime but not the pkg-config metadata the extension's
+# configure step demands, and without it the build dies at "sqlite3 >= 3.7.7
+# were not met". mbstring/bcmath/intl: Laravel and the protocol's byte maths.
+# zip/gd: asset handling. libicu for intl.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         libicu-dev \
+        libsqlite3-dev \
         libzip-dev \
         libpng-dev \
         libonig-dev \
