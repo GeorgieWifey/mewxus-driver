@@ -33,7 +33,9 @@ RUN composer install \
         --no-scripts
 
 # ---------------------------------------------------------------- runtime
-FROM php:8.3-apache AS runtime
+# 8.4, not 8.3: composer.lock was resolved on 8.5, so the vendor tree's
+# platform_check demands >= 8.4.1 and artisan dies before it can boot on 8.3.
+FROM php:8.4-apache AS runtime
 
 # sqlite3/pdo_sqlite: the preset store. libsqlite3-dev is required — the base
 # image ships the sqlite runtime but not the pkg-config metadata the extension's
