@@ -1,0 +1,91 @@
+name: PR Agent
+
+on:
+  pull_request_target:
+    types: [opened, reopened, ready_for_review, synchronize]
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-agent-${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}
+  cancel-in-progress: false
+
+env:
+  OPENAI__API_BASE: https://lumine.linacats.top/v1
+  CONFIG__MODEL: openai/gpt-6.1-sol
+  CONFIG__FALLBACK_MODELS: '["openai/gpt-6-luna"]'
+  CONFIG__CUSTOM_MODEL_MAX_TOKENS: '32000'
+  CONFIG__REASONING_EFFORT: medium
+  CONFIG__ADDITIONAL_REASONING_EFFORT_MODELS: '["gpt-6.1-sol", "gpt-6-luna"]'
+  CONFIG__AI_TIMEOUT: '180'
+  CONFIG__NUM_RETRIES: '2'
+  GITHUB_ACTION_CONFIG__AUTO_REVIEW: 'true'
+  GITHUB_ACTION_CONFIG__AUTO_DESCRIBE: 'false'
+  GITHUB_ACTION_CONFIG__AUTO_IMPROVE: 'false'
+  GITHUB_ACTION_CONFIG__HANDLE_PUSH_TRIGGER: 'true'
+  GITHUB_ACTION_CONFIG__PUSH_COMMANDS: '["/review"]'
+
+jobs:
+  review:
+    if: >-
+      (github.event_name == 'pull_request_target' && !github.event.pull_request.draft) ||
+      (github.event_name == 'issue_comment' && github.event.issue.pull_request &&
+       github.event.sender.type != 'Bot' && startsWith(github.event.comment.body, '/') &&
+       contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association))
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      # Fetches PR changes through the API; never checks out or executes PR code.
+      - name: Review pull request or respond to command
+        uses: docker://pragent/pr-agent:0.50.0-github_action
+        env:
+          OPENAI_KEY: ${{ secrets.PR_AGENT_API_KEY }}
+          OPENAI__KEY: ${{ secrets.PR_AGENT_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  connection-test:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Test primary and fallback models through PR-Agent
+        env:
+          OPENAI__KEY: ${{ secrets.PR_AGENT_API_KEY }}
+        shell: bash
+        run: |
+          docker run --rm -i --entrypoint python \
+            -e OPENAI__KEY -e OPENAI__API_BASE -e CONFIG__MODEL \
+            -e CONFIG__FALLBACK_MODELS -e CONFIG__CUSTOM_MODEL_MAX_TOKENS \
+            -e CONFIG__REASONING_EFFORT -e CONFIG__ADDITIONAL_REASONING_EFFORT_MODELS \
+            -e CONFIG__AI_TIMEOUT -e CONFIG__NUM_RETRIES \
+            pragent/pr-agent:0.50.0-github_action - <<'PY'
+          import asyncio
+          from pr_agent.config_loader import get_settings
+          from pr_agent.algo.ai_handlers.litellm_ai_handler import LiteLLMAIHandler
+
+          async def main():
+              settings = get_settings()
+              assert settings.openai.api_base == "https://lumine.linacats.top/v1"
+              assert settings.openai.key, "PR_AGENT_API_KEY is missing"
+              settings.config.max_output_tokens = 256
+              handler = LiteLLMAIHandler()
+              for model in [settings.config.model, *settings.config.fallback_models]:
+                  response, finish = await handler.chat_completion(
+                      model=model,
+                      system="You are testing an API connection. Reply with OK only.",
+                      user="Reply with OK only.",
+                  )
+                  assert response and "OK" in response.upper(), f"No valid response from {model}"
+                  assert finish != "error", f"Model failed: {model}"
+                  print(f"Connection verified: {model}")
+
+          asyncio.run(main())
+          PY
